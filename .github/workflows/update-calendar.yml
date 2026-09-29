@@ -1,0 +1,91 @@
+name: Update calendar
+
+on:
+  schedule:
+    # Every Champions match starts between 06:00 and 12:00 UTC, so 20:17 UTC sees each day's results before
+    # the next day starts. It's off the top of the hour because GitHub delays those scheduled runs the most.
+    - cron: "17 20 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# a manual run overlapping the scheduled one would publish on top of a stale sha
+concurrency:
+  group: update-calendar
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      # where update.ts writes locally, and where subscribers read it on the ics branch
+      CALENDAR_PATH: public/valorant-champions-2026.ics
+      PUBLISH_BRANCH: ics
+      PUBLISHED_PATH: valorant-champions-2026.ics
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          # everything that writes goes through the GitHub API, git itself never needs the token
+          persist-credentials: false
+
+      # pinned to a commit because setup-bun receives this job's write token by default
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.2
+
+      - run: bun install --frozen-lockfile
+      - run: bun test
+
+      # update.ts leaves the file alone when no match changed, so it needs the published copy to compare against
+      - name: Download the published calendar
+        run: |
+          mkdir -p "$(dirname "$CALENDAR_PATH")"
+          published_json="$RUNNER_TEMP/published.json"
+
+          if gh api "repos/$GITHUB_REPOSITORY/contents/$PUBLISHED_PATH?ref=$PUBLISH_BRANCH" > "$published_json" 2>/dev/null; then
+            jq -r .content "$published_json" | base64 -d > "$CALENDAR_PATH"
+            echo "PUBLISHED_SHA=$(jq -r .sha "$published_json")" >> "$GITHUB_ENV"
+            echo "downloaded the calendar from the $PUBLISH_BRANCH branch"
+          else
+            echo "PUBLISHED_SHA=" >> "$GITHUB_ENV"
+            echo "nothing published on the $PUBLISH_BRANCH branch yet"
+          fi
+
+      - run: bun run update
+
+      # Commits go through the GitHub API as github-actions[bot], so the workflow never configures a git identity.
+      - name: Publish to the ics branch if any match changed
+        run: |
+          if [ "$(git hash-object "$CALENDAR_PATH")" = "$PUBLISHED_SHA" ]; then
+            echo "no match changes since the last publish"
+            exit 0
+          fi
+
+          if gh api "repos/$GITHUB_REPOSITORY/branches/$PUBLISH_BRANCH" --silent 2>/dev/null; then
+            # the contents API wants the current blob sha to replace a file, and no sha to add one
+            sha_field=()
+            if [ -n "$PUBLISHED_SHA" ]; then
+              sha_field=(-f "sha=$PUBLISHED_SHA")
+            fi
+
+            gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/$PUBLISHED_PATH" \
+              -f "message=chore: update Champions 2026 calendar" \
+              -f "branch=$PUBLISH_BRANCH" \
+              -f "content=$(base64 -w0 "$CALENDAR_PATH")" \
+              "${sha_field[@]}" \
+              --jq '"published commit " + .commit.sha'
+            exit 0
+          fi
+
+          # first publish: create the branch with a single commit that holds only the calendar
+          tree_sha=$(jq -n --arg path "$PUBLISHED_PATH" --rawfile content "$CALENDAR_PATH" \
+              '{tree: [{path: $path, mode: "100644", type: "blob", content: $content}]}' \
+            | gh api --method POST "repos/$GITHUB_REPOSITORY/git/trees" --input - --jq .sha)
+          commit_sha=$(jq -n --arg tree "$tree_sha" \
+              '{message: "chore: publish Champions 2026 calendar", tree: $tree, parents: []}' \
+            | gh api --method POST "repos/$GITHUB_REPOSITORY/git/commits" --input - --jq .sha)
+          gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+            -f "ref=refs/heads/$PUBLISH_BRANCH" -f "sha=$commit_sha" --silent
+          echo "created the $PUBLISH_BRANCH branch at commit $commit_sha"
