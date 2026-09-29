@@ -4,6 +4,10 @@ A subscribable calendar of every VALORANT Champions 2026 (Shanghai) match. A Git
 
 ## Subscribe
 
+**In the browser:** [n-ochs.github.io/valorant-champs-calendar](https://n-ochs.github.io/valorant-champs-calendar/) (pick Apple or Google, or copy the URL). GitHub Pages serves `index.html` from the root of `master`.
+
+**Manually:**
+
 | Feed | URL |
 | --- | --- |
 | VALORANT Champions 2026 | `webcal://raw.githubusercontent.com/n-ochs/valorant-champs-calendar/ics/valorant-champions-2026.ics` |
