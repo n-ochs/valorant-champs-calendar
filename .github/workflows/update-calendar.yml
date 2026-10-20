@@ -1,16 +1,13 @@
 name: Update calendar
 
+# Champions 2026 ended on 2026-10-18, so the daily schedule is gone. Run it from the Actions tab if Riot ever corrects a result.
 on:
-  schedule:
-    # Every Champions match starts between 06:00 and 12:00 UTC, so 20:17 UTC sees each day's results before
-    # the next day starts. It's off the top of the hour because GitHub delays those scheduled runs the most.
-    - cron: "17 20 * * *"
   workflow_dispatch:
 
 permissions:
   contents: write
 
-# a manual run overlapping the scheduled one would publish on top of a stale sha
+# two overlapping runs would publish on top of a stale sha
 concurrency:
   group: update-calendar
 

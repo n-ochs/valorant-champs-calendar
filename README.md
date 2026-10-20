@@ -1,6 +1,6 @@
 # valorant-champs-calendar
 
-A subscribable calendar of every VALORANT Champions 2026 (Shanghai) match. A GitHub Actions workflow rebuilds it once a day. Bracket slots start as TBD and pick up team names as results come in.
+A subscribable calendar of every VALORANT Champions 2026 (Shanghai) match. The tournament ended on 2026-10-18, and the calendar now holds all 34 matches with final scores. During the event a GitHub Actions workflow rebuilt it every day, filling in TBD bracket slots as results came in.
 
 ## Subscribe
 
@@ -37,9 +37,9 @@ bun run typecheck
 
 `public/` is gitignored. The published calendar lives on the `ics` branch, not `master`.
 
-## Daily update
+## Updating
 
-`.github/workflows/update-calendar.yml` runs at 20:17 UTC every day, and on demand from the Actions tab. Every Champions match starts between 06:00 and 12:00 UTC, so each run sees the day's results before the next day's matches start.
+`.github/workflows/update-calendar.yml` ran at 20:17 UTC every day of the tournament. With the tournament over, it no longer runs on a schedule. Start it from the Actions tab (Update calendar → Run workflow) if Riot ever corrects a result.
 
 Each run:
 
@@ -49,8 +49,6 @@ Each run:
 4. Commits the file to `ics` if it changed. The first run creates the `ics` branch with nothing on it but the calendar.
 
 Commits go through GitHub's API as `github-actions[bot]`. The workflow never sets a git identity and needs no repo settings changes. `.github/workflows/test.yml` runs the tests and typecheck on pushes to `master` and on pull requests.
-
-GitHub turns off scheduled workflows in public repos after 60 days without activity. The tournament ends 2026-10-18, well inside that window.
 
 ## Data source
 
